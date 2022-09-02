@@ -1,0 +1,29 @@
+module Dijkstra.AST.Examples.State (Ev Wr St : Set) where
+
+open import Data.Product                          using (_×_ ; _,_)
+open import Dijkstra.AST.Core
+open import Dijkstra.AST.RWS Ev Wr St
+open        ASTPredTrans     RWSPT
+open        RWSSyntax
+open import Function                              using (case_of_)
+open import Haskell.Prelude
+open import Relation.Binary.PropositionalEquality
+
+wp : forall {l l' l''}
+  -> {a : Set l} {b : a -> Set l'}
+  -> ((x : a) -> b x)
+  -> ((x : a) -> b x -> Set l'')
+  -> (     a  ->        Set l'')
+wp a→ba a→ba→Set = \a -> a→ba→Set a (a→ba a)
+
+-- wpRWS : {ev : Ev} {A : Set}
+-- wpRWS : {ev : Ev} {A : Set}
+--      -> (A -> RWS A)
+--      -> (P : A × St × Wr -> St × St × Wr -> Set)
+--      -> (    A × St × Wr                 -> Set)
+-- wpRWS {Ev} {A} f P (a , st , wr) = wp f (go {A}) a
+--  where
+--   go : {A : Set} → A → RWS A → Set
+--   go a rws = ASTPredTrans.predTrans RWSPT rws {!!} (Ev , st)
+--   -- {!((const λ c -> ASTPredTrans.predTrans RWS  (λ j -> P ?) c)) !}
+

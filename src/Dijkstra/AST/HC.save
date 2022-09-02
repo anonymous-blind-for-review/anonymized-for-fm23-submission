@@ -1,0 +1,269 @@
+predTrans-is-weakest : ∀ {A} → (m : MaybeD A) → Post⇒wp {A} m unit
+predTrans-is-weakest (ASTreturn _) _ = id
+predTrans-is-weakest (ASTbind m f) _ Pr
+  with predTrans-is-weakest m
+...| rec
+  with runMaybe m unit
+... | nothing = rec _ λ where _ refl → Pr
+... | just a  = rec _ λ where _ refl → predTrans-is-weakest (f a) _ Pr
+predTrans-is-weakest (ASTop Maybe-bail _) _ = id
+
+
+------------------------------------------------------------------------------
+
+
+MaybebindPost : ∀ {A B} → (A → PredTrans B) → Post B → Post A
+MaybebindPost    A→_MaybeB→Set_→Unit→Set   MaybeB→Set =
+  λ { nothing  →                           MaybeB→Set nothing
+    ; (just a) → A→_MaybeB→Set_→Unit→Set a MaybeB→Set unit }
+
+MaybebindPost⊆
+  : ∀ {A B} (f : A → PredTrans B) (P₁ : Post B) (P₂ : Post A)
+    → (          P₁ nothing → P₂ nothing)
+    → (∀ a → f a P₁ unit    → P₂ (just a))
+    → MaybebindPost f P₁ ⊆ₒ P₂
+MaybebindPost⊆ _ _ _ P₁_nothing→P₂_nothing
+                     a→faP₁unit→P₂_just_a_ =
+  λ { nothing  P₁_nothing → P₁_nothing→P₂_nothing P₁_nothing
+    ; (just a)   faP₁unit → a→faP₁unit→P₂_just_a_ a faP₁unit }
+
+
+  --------------------------------------------------
+  -- refinement
+
+  record Spec {l : Level.Level} (a : Set) (b : a -> Set) : Set (Level.suc l) where
+    constructor [[_,_]]
+    field
+      pre  :      a         -> Set l
+      post : (x : a) -> b x -> Set l
+
+  SpecK : {l : Level.Level} -> Set -> Set -> Set (Level.suc l)
+  SpecK a b = Spec a (K b)
+   where
+    K : {a : Set} -> Set -> (a -> Set)
+    K b = \_ -> b
+
+  infixr 5 _::_
+  data List {l : Level.Level} (a : Set l) : Set l where
+    Nil  :                List a
+    _::_ : a -> List a -> List a
+
+  length : {a : Set} -> List a -> Nat
+  length Nil = Zero
+  length (_ :: xs) = Succ (length xs)
+
+  data Add : List Nat -> List Nat -> Set where
+    AddStep : {x1 x2 : Nat} -> {xs : List Nat}
+           -> Add (x1 :: x2 :: xs) ((x1 + x2) :: xs)
+
+  addSpec : SpecK (List Nat) (List Nat)
+  addSpec = [[ (\xs -> length xs > 1) , Add ]]
+
+  wpSpec : forall {l a} -> {b : a -> Set}
+        -> Spec {l} a b
+        -> (P : (x : a) -> b x -> Set l)
+        -> (a -> Set l)
+  wpSpec [[ pre , post ]] P = \a -> (pre a)
+                                  ∧ (post a ⊆ᵢ P a)
+
+
+------------------------------------------------------------------------------
+
+  -- postulate
+  --   -- TODO-1 : prove postulated 'maybePTApp'
+  --   -- TODO-1 : add comments comparing it to 'maybePTMono'
+  maybePTApp
+      : ∀ {A} {P₁ P₂ : Post A} (m : MaybeD A) i
+        → predTrans m (λ o → P₁ o → P₂ o) i
+        → predTrans m        P₁           i
+        → predTrans m               P₂    i
+  maybePTApp (ASTreturn _)                    _ ptP₁o→P₂o ptP₁ =
+                -- predTrans (ASTreturn a) P₂ i
+                -- P₂ (just a)
+    ptP₁o→P₂o   -- P₁ (just a)
+    ptP₁
+
+  maybePTApp (ASTbind (ASTreturn a)        f) i ptP₁o→P₂o ptP₁ =
+    {!!}
+  --   with runMaybe (f a) i
+  -- ... | nothing = λ { (just a) eq → {!!} }
+  -- ... | just a' = λ { (just x) eq → {!!} }
+
+  maybePTApp {A} {P₁} {P₂} (ASTbind (ASTbind m f₁)       f) i ptP₁o→P₂o ptP₁
+    with runMaybe m i
+  ... | nothing = {!!}
+  ... | just a' = {!!}
+
+  maybePTApp (ASTbind (ASTop Maybe-bail _) _) _ ptP₁o→P₂o ptP₁ nothing r≡nothing =
+    (ptP₁o→P₂o nothing r≡nothing) (ptP₁ nothing r≡nothing)
+
+  maybePTApp (ASTop   Maybe-bail            _) _ ptP₁o→P₂o ptP₁ =
+               -- predTrans (ASTop Maybe-bail f) P₂ i
+               -- P₂ nothing
+    ptP₁o→P₂o  -- P₁ nothing
+    ptP₁
+
+------------------------------------------------------------------------------
+
+  aaa1 : Set
+  aaa1 = dom ⟦_⟧ (Div (Val 3) (Val 0))
+  {-
+  aaa2 : dom ⟦_⟧ (Div (Val 3) (Val 0))
+  aaa2 = {!!} -- cannot be constructed
+  -}
+  aaa3 : MaybeD Nat
+  aaa3 = ⟦ (Div (Val 3) (Val 0)) ⟧
+  aaa4 : Maybe Nat
+  aaa4 = runMaybe aaa3 unit
+  aaa5 : aaa4 ≡ nothing
+  aaa5 = refl
+
+  -- sd→dom : ∀ (e : Expr) → SafeDiv e → dom ⟦_⟧ e → dom ⟦_⟧ e ≡ ⊤
+  -- sd→dom (Val _)                       _     _ = refl
+  -- sd→dom (Div e₁ e₂) (¬e₂⇓0 , (sd₁ , sd₂))  x  = {!!}
+
+  -- dom→sd : ∀ (e₁ e₂ : Expr) → SafeDiv (Div e₁ e₂) → dom ⟦_⟧ e₁ ≡ ⊤ × dom ⟦_⟧ e₂ ≡ ⊤
+  -- dom→sd e₁ (Val x)     (¬e₂⇓0 , (sd₁ , sd₂)) = {!!} Data.Product., refl
+  -- dom→sd e₁ (Div e₂ e₃) (¬e₂⇓0 , (sd₁ , sd₂)) = {!!} Data.Product., refl
+
+  -- aaaa : ∀ (el er : Expr) -> er ⇓ Zero -> runMaybe ⟦ Div el er ⟧ unit ≡ nothing
+  -- aaaa el           er@(Val .0) ⇓Base  with runMaybe ⟦ Div el er ⟧ unit | inspect (runMaybe ⟦ Div el er ⟧) unit
+  -- ... | nothing | [ ≡nothing ] rewrite ≡nothing = refl
+  -- ... | just x  | [ ≡justx   ] rewrite ≡justx   = {!!}
+  -- aaaa el (Div el' er@(Val  0)) Div⇓0 with runMaybe ⟦ Div el' er ⟧ unit | inspect (runMaybe ⟦ Div el' er ⟧) unit
+  -- ... | nothing | [ eq ] rewrite eq = {!!}
+  -- ... | just x₁ | [ eq ] = {!!}
+  -- aaaa el (Div el' (Val (Succ _))) x = {!!}
+  -- aaaa el (Div el' (Div el₁ er₂)) x = {!!}
+
+  -- rm : ∀ (e : Expr) (n : Nat) -> e ⇓ 0 -> runMaybe ⟦ e ⟧ unit ≡ just (Succ n) -> ⊥
+  -- rm (Val .0) Zero ⇓Base ()
+  -- rm (Div el er) Zero rmm x = {!!}
+  -- rm (Div el er) (Succ n) rmm x = {!!}
+
+
+------------------------------------------------------------------------------
+
+module HCP where
+  open Syntax
+  open Partiality
+
+  -- correct' : ∀ (e : Expr) i → SafeDiv e → ASTPredTrans.predTrans MaybePT (⟦ e ⟧) (PN e) i
+  -- --                predTrans ⟦ e ⟧ (PN e) i
+  -- --
+  -- --                     Val x ⇓ x
+  -- correct' (Val _)        _                           _  = ⇓Base
+  -- correct' (Div el er) unit (er⇓Zero→Void , (sdl , sdr)) = {!!}
+
+  open import Data.Nat using (ℕ; zero; suc; _+_)
+  open import Data.Empty using (⊥; ⊥-elim)
+  data isEven : ℕ → Set where
+    even-z :                      isEven  zero
+    even-s : {n : ℕ} → isEven n → isEven (suc (suc n))
+
+  xxx' : ASTPredTrans.predTrans MaybePT (ASTreturn 0) (\ { nothing → ⊥ ; (just n) → isEven n}) unit
+  xxx' = even-z
+
+  xxx  : ℕ -> Set
+  xxx n = ASTPredTrans.predTrans MaybePT (ASTreturn (n + 2)) (\ { nothing → ⊥ ; (just m) → isEven m}) unit
+
+  xxx''  : (n : ℕ) -> isEven n -> ASTPredTrans.predTrans MaybePT (ASTreturn (n + 2)) (\ { nothing → ⊥ ; (just m) → isEven m}) unit
+  xxx'' zero p
+    --          predTrans (ASTreturn (zero + 2))
+    --                    (λ { nothing → ⊥ ; (just m) → isEven m })
+    --                    unit
+    --
+    --          isEven 2
+    = even-s p
+  xxx'' (suc (suc n)) (even-s p)
+    --          predTrans (ASTreturn (suc (suc n) + 2))
+    --                    (λ { nothing → ⊥ ; (just m) → isEven m })
+    --                    unit
+    --
+    --          isEven (suc (suc (n + 2)))
+    = even-s (xxx'' n p)
+
+  MaybePTMono' : ASTPredTransMono MaybePT
+  ASTPredTransMono.returnPTMono MaybePTMono'
+      --                               returnPT : ∀ {A} → A → PredTrans A
+      --                               returnPT MaybePT x P i = P (just x)
+      --                                                      PredTrans : (A : Set) → Set₁
+      --                                                      PredTrans A = (P : Post A) → Pre
+      --                                                                         Post : Set → Set₁
+      --                                                                         Post A = (o : Output A) → Set
+      --                                                                                   Pre : Set₁
+      --                                                                                   Pre = (i : Input) → Set
+    a -- returnPTMono : ∀ {A} → (x : A)
+      --              → MonoPredTrans (returnPT x)
+      --                MonoPredTrans : ∀ {A} → PredTrans A → Set₁
+      --                MonoPredTrans pt = ∀ P₁ P₂ → (P₁⊆ₒP₂ : P₁ ⊆ₒ P₂)                      → pt P₁ ⊆ᵢ pt P₂
+      --                                               _⊆ₒ_  : ∀ {A} → (P₁ P₂ : Post A) → Set        _⊆ᵢ_ : (P₁ P₂ : Pre) → Set
+      --                                            P₁ ⊆ₒ P₂ = ∀ o → P₁ o → P₂ o                   P₁ ⊆ᵢ P₂ = ∀ i → P₁ i → P₂ i
+    MaybeA→Set                 -- P₁
+    PostMaybeA→Set             -- P₂
+    MaybeA→Set⊆ₒPostMaybeA→Set -- P₁⊆ₒP₂ : (o : Maybe A) → MaybeA→Set o → PostMaybeA→Set o
+    i
+    MaybeA→Set_justa_          -- : MaybeA→Set (just a)
+      = -- returnPT a PostMaybeA→Set i
+        -- PostMaybeA→Set (just a)
+        MaybeA→Set⊆ₒPostMaybeA→Set
+        (just a)               -- : Output A                (i.e., Maybe A)
+        MaybeA→Set_justa_      -- : returnPT a MaybeA→Set i (i.e., MaybeA→Set (just a)
+
+  ASTPredTransMono.bindPTMono₁  MaybePTMono' f monoF unit P₁ P₂ P₁⊆ₒP₂ nothing  wp .nothing  refl =
+    P₁⊆ₒP₂ nothing (wp nothing refl)
+  ASTPredTransMono.bindPTMono₁  MaybePTMono' f monoF unit P₁ P₂ P₁⊆ₒP₂ (just y) wp .(just y) refl =
+    monoF y P₁ P₂ P₁⊆ₒP₂ unit (wp (just y) refl)
+
+  ASTPredTransMono.bindPTMono₂  MaybePTMono' {B1} {B2} f₁ f₂ f₁⊑f₂ unit P nothing wp .nothing refl =
+    wp nothing refl
+  ASTPredTransMono.bindPTMono₂  MaybePTMono' f₁ f₂ f₁⊑f₂ unit P (just y) wp .(just y) refl =
+    f₁⊑f₂ y _ unit (wp (just y) refl)
+
+  ASTPredTransMono.opPTMono₁    MaybePTMono' Maybe-bail f monoF P₁ P₂ P₁⊆ₒP₂ unit wp =
+    P₁⊆ₒP₂ nothing wp
+  ASTPredTransMono.opPTMono₂    MaybePTMono' Maybe-bail f₁ f₂ f₁⊑f₂ P i wp =
+    wp
+
+
+  ------------------------------------------------------------------------------
+
+  -- data _⇓'_ : Expr -> Nat -> Set where
+  --   ⇓'Base : forall {n}
+  --         -> Val n ⇓' n
+  --   ⇓'Step : forall {el er n1 n2}
+  --         ->     el    ⇓'  n1
+  --         ->        er ⇓'       n2
+  --         -> Div el er ⇓' (n1 + n2)
+
+  -- ⟦_⟧' : Expr -> MaybeD Nat
+  -- ⟦ Val x ⟧'     = ASTreturn x
+  -- ⟦ Div e1 e2 ⟧' = ASTbind (⟦ e1 ⟧') (\v1 ->
+  --                  ASTbind (⟦ e2 ⟧') (\v2 ->
+  --                  ASTreturn (v1 + v2)))
+
+  -- PN' : Expr → Post Nat
+  -- PN' e nothing  = Val 0 ⇓' 0
+  -- PN' e (just n) =     e ⇓' n
+
+  -- correct' : ∀ (e : Expr) i → ASTPredTrans.predTrans MaybePT (⟦ e ⟧') (PN' e) i
+  -- correct' (Val _)     _ = ⇓'Base
+  -- correct' (Div el er) i =
+  --   ASTPredTransMono.predTransMono MaybePTMono ⟦ el ⟧' (PN' el) _ (λ { o PN'elo nothing Maybeℕ≡o → ⇓'Base ; o PN'elo (just x) Maybeℕ≡o → {!!} }) i ihl
+  --  --  ASTPredTransMono.predTransMono MaybePTMono ⟦ e₁ ⟧ (PN e₁) _ PN⊆₁ unit ih₁
+  --  where
+  --   ihl = correct' el i
+  --   ihr = correct' er i
+
+  --  --  PN⊆₂ : ∀ n → e₁ ⇓ n → PN' e₂ ⊆ₒ _
+  --  --  PN⊆₂ _    _              _        ()  nothing        refl
+  --  --  PN⊆₂ _    _ .(just       _)  e₂⇓Zero (just Zero)     refl = ¬e₂⇓0 e₂⇓Zero
+  --  --  PN⊆₂ _ e₁⇓n .(just (Succ _)) e₂⇓Succ (just (Succ _)) refl = ⇓Step e₁⇓n e₂⇓Succ
+
+  --   PN⊆₁ : PN' el ⊆ₒ λ o → {!!}
+  --   PN⊆₁ nothing ⇓'Base = {!!}
+  --   PN⊆₁ (just x) ⇓'Base = {!!}
+  --   PN⊆₁ (just .(_ + _)) (⇓'Step ⇓'Base ⇓'Base) = {!!}
+  --   PN⊆₁ (just .(_ + (_ + _))) (⇓'Step ⇓'Base (⇓'Step y₁ y₂)) = {!!}
+  --   PN⊆₁ (just .(_ + _ + _)) (⇓'Step (⇓'Step y y₂) y₁) = {!!}
+  --     -- ASTPredTransMono.predTransMono MaybePTMono ⟦ er ⟧' (PN' er) _ ? {-(PN⊆₂ n el⇓n)-} unit ihr

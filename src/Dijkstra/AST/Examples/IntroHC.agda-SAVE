@@ -1,0 +1,48 @@
+module Dijkstra.AST.Examples.IntroHC (Ev Wr St : Set) where
+
+open import Data.Maybe                  using (maybe)
+open import Data.Product                using (_×_ ; _,_)
+open import Dijkstra.AST.Core
+open import Dijkstra.AST.RWS Ev Wr St
+open RWSBase.RWSCmd
+open import Function                    using (case_of_)
+open import Haskell.Prelude             hiding (maybe)
+open import Level                       as Level
+open import Relation.Binary.PropositionalEquality
+
+module Prog2 where
+
+  open import Agda.Builtin.Unit
+  open import Data.Empty
+  open import Data.Nat renaming (ℕ to Nat)
+  open import Data.Sum
+  open import Dijkstra.AST.Maybe
+
+  prog : (mn1 mn2 : MaybeAST Nat) → MaybeAST Nat
+  prog mn1 mn2 = do
+    _  <- mn1
+    n2 <- mn2
+    return n2
+
+  ProgPost : (i : Unit) → Maybe Nat → Set
+  ProgPost _  nothing = ⊤
+  ProgPost _ (just n) = n ≡ n
+
+  progPost : ∀ mn1 mn2 i → ProgPost i (runMaybeAST (prog mn1 mn2) i)
+  progPost mn1 mn2 i with runMaybeAST (prog mn1 mn2) i
+  ... | nothing = tt
+  ... | just n  = refl
+
+  progPostWP : ∀ mn1 mn2 → MaybeAST.predTrans (prog mn1 mn2) (ProgPost unit) unit
+  progPostWP mn1 mn2 =
+    MaybeAST.predTransMono (prog mn1 mn2) (λ o → runMaybeAST (prog mn1 mn2) unit ≡ o) _ ⊆ₒProgPost unit PT1
+   where
+    ⊆ₒProgPost : (λ o → runMaybeAST (prog mn1 mn2) unit ≡ o) MaybeAST.⊆ₒ ProgPost unit
+    ⊆ₒProgPost nothing  _ = tt
+    ⊆ₒProgPost (just _) _ = refl
+
+    PT1 : MaybeAST.predTrans (prog mn1 mn2) (λ o → runMaybeAST (prog mn1 mn2) unit ≡ o) unit
+    PT1 = MaybeAST.predTrans-is-weakest (prog mn1 mn2) _ refl
+
+  progPost2 : ∀ mn1 mn2 → ProgPost unit (runMaybeAST (prog mn1 mn2) unit)
+  progPost2 mn1 mn2 = MaybeAST.sufficient (prog mn1 mn2) (ProgPost unit) unit (progPostWP mn1 mn2)

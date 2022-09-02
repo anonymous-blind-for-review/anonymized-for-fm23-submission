@@ -1,0 +1,13 @@
+#+TITLE: Documentation and papers
+
+The following documentation and papers related to this repository are available.  Links will be provided when they are finalised.
+
+** [[file:PeerHandlerContracts.org][Formal verification of the LibraBFT consensus algorithm]]
+  - ...
+  - Local documentation of some key aspects of the verification effort
+
+** ANONYMOUS
+
+** ANONYMOUS
+
+

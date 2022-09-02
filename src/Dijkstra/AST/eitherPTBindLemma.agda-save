@@ -1,0 +1,25 @@
+module EitherBindProps {A B : Set} {m : EitherAST A} {f : A → EitherAST B}
+                      (prog : EitherAST B)
+                      (prog≡ : prog ≡ ASTbind m f) where
+  rightProp : ∀ x
+             → runEitherAST m    unit ≡ Right x
+             → runEitherAST prog unit ≡ runEitherAST (f x) unit
+  rightProp x runm≡rightx rewrite prog≡ | runm≡rightx = refl
+
+eitherPTBindLemma : ∀ {A B : Set} {m : EitherAST A} {f : A → EitherAST B} {P : Post B}{i : Input}
+                   → (prog : EitherAST B)
+                   → prog ≡ ASTbind m f
+                   → (∀ x → runEitherAST m i ≡ Left  x → P (Left x))
+                   → (∀ x → runEitherAST m i ≡ Right x → P (runEitherAST (f x) i))
+                   → predTrans prog P i
+eitherPTBindLemma {A} {m = m} {f} {P} {unit} prog refl leftCase rightCase
+   with runEitherAST m unit | inspect (runEitherAST m) unit
+... | Left _ | [ R ] = predTrans-is-weakest m _ bindPost
+      where
+      bindPost : _
+      bindPost r refl rewrite R = {!!} -- leftCase refl
+... | Right x  | [ R ] = predTrans-is-weakest prog P bindPost
+      where
+      bindPost : _
+      bindPost = subst P (sym (EitherBindProps.rightProp prog refl x R)) (rightCase x refl)
+
